@@ -1,3 +1,5 @@
+use crate::analysis::match_percentage;
+
 pub fn vig2table(keyword1: &str, keyword2: &str) -> Vec<Vec<char>> {
     let alphabet: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
     let key1: Vec<char> = keyword1.to_uppercase().chars().collect();
@@ -57,3 +59,80 @@ pub fn vdecode(encrypted: &str, table: &[Vec<char>]) -> String {
     }
     decrypted_chars.into_iter().collect()
 }
+
+pub fn vigenere(plain_text: &str, key: &str) -> String {
+    // Remove all unicode and non-ascii characters from key
+    let key: String = key.chars().filter(|&c| c.is_ascii_alphabetic()).collect();
+    let key = key.to_ascii_lowercase();
+
+    let key_len = key.len();
+    if key_len == 0 {
+        return String::from(plain_text);
+    }
+
+    let mut index = 0;
+
+    plain_text
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphabetic() {
+                let first = if c.is_ascii_lowercase() { b'a' } else { b'A' };
+                let shift = key.as_bytes()[index % key_len] - b'a';
+                index += 1;
+                // modulo the distance to keep character range
+                (first + (c as u8 + shift - first) % 26) as char
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+
+pub fn kryptos(
+    keyword1: &str,
+    encrypted: &str,
+    comparison: &str,
+    key_length: usize,
+    ) -> String{
+    let mut best_score = 0.0;
+    let mut best_keyword2 = String::new();
+    let mut best_decrypted = String::new();
+
+    let mut keyword2: Vec<char> = vec!['A'; key_length];
+
+    for _ in 0..2 {
+        for i in 0..key_length {
+            let mut best_char = keyword2[i];
+
+            for index in 'A'..='Z' {
+                keyword2[i] = index;
+
+                let table = vig2table(keyword1, &keyword2.iter().collect::<String>());
+                let decrypted = vdecode(encrypted, &table);
+                let score = match_percentage(comparison, &decrypted);
+
+                if score > best_score {
+                    best_score = score;
+                    best_decrypted = decrypted;
+                    best_char = index;
+                }
+            }
+
+            keyword2[i] = best_char;
+        }
+    }
+
+    best_keyword2 = keyword2.iter().collect();
+
+    
+    if best_score >80.0 {  
+        println!("length: {} best score: {:?} best_key: {} k1: {}
+        \nbest_decrypted:                    {}",key_length,  best_score as u8, best_keyword2,keyword1, best_decrypted);
+    }
+
+    
+
+    best_keyword2
+    
+}
+
