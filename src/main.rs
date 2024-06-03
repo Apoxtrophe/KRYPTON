@@ -1,6 +1,6 @@
 use std::fmt::Pointer;
 
-use analysis::analyze;
+use analysis::{analyze, AnalysisResult};
 use eframe::egui;
 
 mod analysis;
@@ -8,27 +8,37 @@ mod analysis;
 mod crypt;
 use crypt::*;
 
+mod decipher;
+use decipher::*;
+
 mod vigenere;
 use egui::FontId;
 use vigenere::*;
 
 struct MyApp {
-    result: (String, String, Vec<usize>, usize, String, String, usize, String),
+    result: Option<AnalysisResult>,
     selected_k1: String,
     selected_k1p: String,
     key_length: usize,
+    key1: String,
+    key2: String,
+    output: String,
 }
 
 impl Default for MyApp {
     fn default() -> Self {
         Self {
-            result: Default::default(),
-            selected_k1: String::new(),
-            selected_k1p: String::new(),
+            result: None,
+            selected_k1: "ENCRYPTED".to_string(),
+            selected_k1p: "PLAINTEXT".to_string(),
+            output: "OUTPUT".to_string(),
             key_length: Default::default(),
+            key1: String::new(),
+            key2: String::new(),
         }
     }
 }
+
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -50,9 +60,6 @@ impl eframe::App for MyApp {
                 ("Kryptos Section 4 Plaintext".to_string(), K4p.to_string()),
             ];
 
-
-
-
             ui.horizontal(|ui| {
                 ui.add_sized(
                     [500.0, 200.0],
@@ -68,10 +75,31 @@ impl eframe::App for MyApp {
                         .hint_text("Known Plain Text"),
                 );
             });
-            if ui.add_sized([1010.0, 50.0],(egui::Button::new(egui::RichText::new("Analyze").size(24.0).color(egui::Color32::LIGHT_GREEN)))).clicked() {
-                self.result = analyze(&self.selected_k1, &self.selected_k1p, self.key_length, &[1, 2, 4]);
-            }                                                                                                                                                   
+            if ui.add_sized([500.0, 50.0],(egui::Button::new(egui::RichText::new("Analyze Encrypted & Plaintext").size(24.0).color(egui::Color32::LIGHT_GREEN)))).clicked() {
+                self.result = Some(analyze(&self.selected_k1, &self.selected_k1p, self.key_length, &[1, 2, 4]));
+            } 
+            ui.horizontal(|ui| {
+                
+                ui.add_space(1.0);
+                
+            });
 
+            ui.add_space(16.0); 
+            ui.add_space(16.0);
+             ui.add_sized(
+                [200.0, 20.0],
+                egui::TextEdit::singleline(&mut self.key1)
+                    .font(FontId::monospace(16.0))
+                    .hint_text("Key 1"),
+            );
+            ui.add_space(16.0);
+            ui.add_sized(
+                [200.0, 20.0],
+                egui::TextEdit::singleline(&mut self.key2)
+                    .font(FontId::monospace(16.0))
+                    .hint_text("Key 2"),
+            );                                                                                                                                            
+            ui.add_space(16.0);
             egui::ComboBox::from_label("Selected Encrypted Text")
                 .selected_text(k1_options.iter().find(|&(_, v)| *v == self.selected_k1).unwrap_or_else(|| &k1_options[0]).0.clone())
                 .show_ui(ui, |ui| {
@@ -79,7 +107,7 @@ impl eframe::App for MyApp {
                         ui.selectable_value(&mut self.selected_k1, value.clone(), display);
                     }
                 });
-        
+            ui.add_space(16.0);
             egui::ComboBox::from_label("Select Known Plaintext")
                 .selected_text(k1p_options.iter().find(|&(_, v)| *v == self.selected_k1p).unwrap_or_else(|| &k1p_options[0]).0.clone())
                 .show_ui(ui, |ui| {
@@ -87,31 +115,67 @@ impl eframe::App for MyApp {
                         ui.selectable_value(&mut self.selected_k1p, value.clone(), display);
                     }
                 });
-
+            ui.add_space(16.0);
             ui.add(egui::Slider::new(&mut self.key_length, 1..=25).text("Max Key Length"));
-            
+            ui.add_space(16.0);
             // Run the function and update the result
-            if !self.result.0.is_empty() {
-                let value = &self.result;
+            if let Some(_) = &self.result{
+                let value = &self.result.as_ref().unwrap();
 
-                ui.heading(egui::RichText::new(format!("Chi Score:                 {}", value.0))
+                ui.heading(egui::RichText::new(format!("Chi Score:                 {}", value.chi_percent))
                     .color(egui::Color32::LIGHT_GREEN)
                     .font(FontId::monospace(16.0)));
-                ui.heading(egui::RichText::new(format!("Match Score:               {}", value.1))
+                ui.heading(egui::RichText::new(format!("Index of Coincidence:      {}", value.coincidence))
                     .color(egui::Color32::LIGHT_GREEN)
                     .font(FontId::monospace(16.0)));
-                ui.heading(egui::RichText::new(format!("Kasiski Key Length:        {:?}", value.2))
+                ui.heading(egui::RichText::new(format!("Key Elimination Score:     {} Length: {} Likely Key: {}", value.key_elim_score,value.key_elim_key_length, value.key_elim_key))
                     .color(egui::Color32::LIGHT_GREEN)
                     .font(FontId::monospace(16.0)));
-                ui.heading(egui::RichText::new(format!("Friedman Confidence:       {} Length: {}", value.4, value.3))
+                ui.heading(egui::RichText::new(format!("Match Score:               {}", value.match_percent))
                     .color(egui::Color32::LIGHT_GREEN)
                     .font(FontId::monospace(16.0)));
-                ui.heading(egui::RichText::new(format!("Key Elimination Score:     {} Length: {} Likely Key: {}", value.5, value.6, value.7))
+                ui.heading(egui::RichText::new(format!("Friedman Confidence:       {} Length: {}", value.friedman_confidence, value.friedman_key_length))
                     .color(egui::Color32::LIGHT_GREEN)
                     .font(FontId::monospace(16.0)));
-                
-
+                ui.heading(egui::RichText::new(format!("Kasiski Key Length:        {:?}", value.kasiski))
+                    .color(egui::Color32::LIGHT_GREEN)
+                    .font(FontId::monospace(16.0)));
+                ui.heading(egui::RichText::new(format!("Phi Test Confidence:       {} Length: {}", value.phi_score, value.phi_key))
+                    .color(egui::Color32::LIGHT_GREEN)
+                    .font(FontId::monospace(16.0)));
+                ui.heading(egui::RichText::new(format!("Aster Score:               {}", value.aster_score))
+                    .color(egui::Color32::LIGHT_GREEN)
+                    .font(FontId::monospace(16.0)));
+                ui.heading(egui::RichText::new(format!("Substitution Score:        {}", value.substitution_score))
+                    .color(egui::Color32::LIGHT_GREEN)
+                    .font(FontId::monospace(16.0)));
             }
+            ui.add_space(16.0);
+            ui.add_sized(
+                [500.0, 200.0],
+                egui::TextEdit::multiline(&mut self.output)
+                    .font(FontId::monospace(16.0))
+                    .hint_text("Output Text"),
+            );
+            if ui.add_sized([500.0, 50.0],(egui::Button::new(egui::RichText::new("Analyze Output & Plaintext").size(24.0).color(egui::Color32::LIGHT_GREEN)))).clicked() {
+                self.result = Some(analyze(&self.output, &self.selected_k1p, self.key_length, &[1, 2, 4]));
+            } 
+            
+        });
+        egui::SidePanel::right("right_panel")
+            .min_width(600.0)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.heading("Right Panel");
+                });
+
+                ui.label("This is the right panel");
+                
+                if ui.button("Button").clicked() {
+                    // Handle button click event
+                }
+            
         });
     }
 }

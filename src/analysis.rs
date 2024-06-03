@@ -2,12 +2,31 @@ use std::{collections::{HashMap, HashSet}, iter};
 
 use itertools::Itertools;
 
+use crate::{kryptos, kryptos2, vdecode, vig1table, vig2table, K2p, K2};
+
+pub struct AnalysisResult {
+    pub chi_percent: String,
+    pub match_percent: String,
+    pub kasiski: Vec<usize>,
+    pub friedman_key_length: usize,
+    pub friedman_confidence: String,
+    pub key_elim_score: String,
+    pub key_elim_key_length: usize,
+    pub key_elim_key: String,
+    pub coincidence: String,
+    pub phi_score: String,
+    pub phi_key: usize,
+    pub aster_score: String,
+    pub substitution_score: String,
+}
+
+
 pub fn analyze(                                                                                                                      
     encrypted_text: &str,
     plaintext: &str,
     max_key_length: usize,
     excluded_factors: &[usize],
-) -> (String, String, Vec<usize>, usize, String, String, usize, String) {    
+) -> AnalysisResult {    
 
     let chi_percent = percentage_blocks(chi_squared_score(encrypted_text), 0.1, 10.0);
     let match_percent = percentage_blocks(match_percentage(plaintext, encrypted_text), 0.0, 100.0);                                                                                                                                                       
@@ -16,12 +35,33 @@ pub fn analyze(
     let friedman_confidence = percentage_blocks(friedman.1, 0.05, 1.5);
 
     let key_elim = key_elimation(max_key_length, encrypted_text, plaintext);
-    let key_elim_score = percentage_blocks(key_elim.1, 0.0, 100.0);
+    let key_elim_score = percentage_blocks(key_elim.1, 0.0, 0.6);
 
+    let coincidence = percentage_blocks(index_of_coincidence(encrypted_text), 0.572, 1.04);
 
-    println!("{}", index_of_coincidence(encrypted_text));
-
-    (chi_percent, match_percent, kasiski, friedman.0, friedman_confidence, key_elim_score, key_elim.0, key_elim.2)
+    let phi_results = best_phi(encrypted_text, max_key_length);
+    let phi_key = phi_results.0;
+    let phi_score = percentage_blocks(phi_results.1, 1.0, 2.0);
+    let aster_score = percentage_blocks(aster_score(encrypted_text,plaintext),0.0, 100.0);
+    let substitution_match = substitution_cipher_score(encrypted_text, plaintext).unwrap_or(0.0);
+    let substitution_score = percentage_blocks(substitution_match, 0.0, 100.0);
+ 
+    println!("{}", kryptos("KRYPTOS", encrypted_text, plaintext, max_key_length));
+    AnalysisResult {
+        chi_percent,
+        match_percent,
+        kasiski,
+        friedman_key_length: friedman.0,
+        friedman_confidence,
+        key_elim_score,
+        key_elim_key_length: key_elim.0,
+        key_elim_key: key_elim.2,
+        coincidence,
+        phi_score,
+        phi_key,
+        aster_score,
+        substitution_score,
+    }
 }
 
 pub fn chi_squared_score(encrypted_text: &str) -> f64 {
@@ -296,6 +336,106 @@ fn index_of_coincidence(text: &str) -> f64 {
 
     let ic = sum / (total as f64 * (total as f64 - 1.0));
 
-    ic
+    (ic * 26.0) / 1.73
 }
 
+fn phi_test(text: &str, period: usize) -> f64 {
+    let text = text.to_ascii_uppercase();
+    let text: String = text.chars().filter(|c| c.is_ascii_alphabetic()).collect();
+
+    let ic_total = index_of_coincidence(&text);
+    let mut ic_sum = 0.0;
+
+    for i in 0..period {
+        let column: String = text.chars().skip(i).step_by(period).collect();
+        let ic_column = index_of_coincidence(&column);
+        ic_sum += ic_column;
+    }
+
+    let ic_avg = ic_sum / period as f64;
+    ic_avg / ic_total
+}
+
+pub fn best_phi(text: &str, max_key_length: usize) -> (usize, f64) {
+    let mut best_period = 0;
+    let mut best_score = 0.0;
+
+    for period in 1..=max_key_length {
+        let score = phi_test(text, period);
+        if score > best_score {
+            best_score = score;
+            best_period = period;
+        }
+    }
+
+    (best_period, best_score)
+}
+
+pub fn aster_score(encrypted_text: &str, plaintext: &str) -> f64 {
+
+    let mut score = 0.0;
+    let mut count = 0;
+
+    for (c1, c2) in encrypted_text.chars().zip(plaintext.chars()) {
+        if c1 == '_' || c2 == '_' {
+            continue;
+        }
+
+        count += 1;
+
+        if c1 == c2 {
+            score += 1.0;
+        } else {
+            let dist = ((c1 as u8 - c2 as u8 + 26) % 26).min((c2 as u8 - c1 as u8 + 26) % 26);
+            score += 1.0 / (dist as f64 + 1.0);
+        }
+    }
+
+    if count == 0 {
+        0.0
+    } else {
+        score / count as f64 * 100.0
+    }
+}
+
+pub fn substitution_cipher_score(str1: &str, str2: &str) -> Option<f64> {
+    if str1.len() != str2.len() {
+        return None;
+    }
+
+    let mut char_map = std::collections::HashMap::new();
+    let mut used_chars = std::collections::HashSet::new();
+    let mut match_count = 0;
+    let mut total_count = 0;
+
+    for (c1, c2) in str1.chars().zip(str2.chars()) {
+        if c1 == '_' || c2 == '_' {
+            continue;
+        }
+
+        if !c1.is_ascii_uppercase() || !c2.is_ascii_uppercase() {
+            return None;
+        }
+
+        total_count += 1;
+
+        if let Some(&mapped_char) = char_map.get(&c1) {
+            if mapped_char == c2 {
+                match_count += 1;
+            }
+        } else {
+            if !used_chars.contains(&c2) {
+                char_map.insert(c1, c2);
+                used_chars.insert(c2);
+                match_count += 1;
+            }
+        }
+    }
+
+    if total_count == 0 {
+        return Some(100.0);
+    }
+
+    let score = (match_count as f64 / total_count as f64) * 100.0;
+    Some(score)
+}
