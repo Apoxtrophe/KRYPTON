@@ -1,5 +1,4 @@
-use crate::{analysis::{aster_score, best_phi, match_percentage, substitution_cipher_score}, vdecode};
-
+use crate::{analysis::{aster_score, best_phi, match_percentage, substitution_cipher_score}, vdecode, ALPHABET};
 
 pub fn generate_vigenere_table(keyword1: &str, keyword2: &str) -> Vec<Vec<char>> {
     let alphabet: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
@@ -29,6 +28,25 @@ pub fn vig2table(keyword1: &str, keyword2: &str) -> Vec<Vec<char>> {
 
 pub fn vig1table(keyword2: &str) -> Vec<Vec<char>> {
     generate_vigenere_table("ABCDEFGHIJKLMNOPQRSTUVWXYZ", keyword2)
+}
+
+pub fn print_vigenere_table(table: &Vec<Vec<char>>) {
+    println!();
+    for i in 0..table.len() {
+        let mut string = "".to_string();
+        for j in 0..table[0].len() {
+            string.push(char::from(table[i][j]));
+            string.push(' ');
+        }
+        println!("{}", string);
+    }
+}
+
+pub fn every_nth_letter(s: &str, n: usize) -> String {
+    s.char_indices()
+        .filter(|(i, _)| i % n == 0)
+        .map(|(_, c)| c)
+        .collect()
 }
 
 pub fn kryptos(
@@ -113,4 +131,143 @@ pub fn kryptos2(
     }
 
     (best_keyword1, best_keyword2)
+}
+
+pub fn keyless(
+    encrypted_text: &str,
+    plaintext: &str,
+    max_key_length: usize,
+) {
+    let enc_block = string_to_grid(encrypted_text, max_key_length);
+    let pln_block = string_to_grid(plaintext, max_key_length);
+
+    let enc_columns: Vec<String> = transpose(&enc_block).iter().map(|col| col.iter().collect()).collect();
+    let pln_columns: Vec<String> = transpose(&pln_block).iter().map(|col| col.iter().collect()).collect();
+    
+    let enc_rows = enc_block.iter().map(|row| row.iter().collect::<String>()).collect::<Vec<String>>();
+    let pln_rows = pln_block.iter().map(|row| row.iter().collect::<String>()).collect::<Vec<String>>();
+
+    for i in 0..enc_columns.len() {
+        println!("Line: {} Score: {:?} Code: {}",i + 1, substitution_cipher_score(&enc_columns[i], &pln_columns[i]), enc_columns[i]);
+    }   
+    let alphabet = ALPHABET;
+    let mut new_table = create_decipher_grid(&alphabet, max_key_length);
+
+    for column in 0..pln_columns.len(){
+        let enc_col_sub = &enc_columns[column];
+        let pln_col_sub = &pln_columns[column];
+        for (index, c) in alphabet.char_indices() {
+            for i in pln_col_sub.char_indices()  {
+                if c == i.1 {
+                    let enc_char = enc_col_sub.chars().nth(i.0).unwrap();
+                    new_table[column + 1][index] = enc_char;
+                }
+            }
+        }
+        
+    }
+    println!("{}", pretty_grid(&new_table));
+    print_grid(&new_table);
+
+}
+
+fn create_decipher_grid(key: &str, n: usize) -> Vec<Vec<char>> {
+    let mut grid = vec![key.chars().collect()];
+
+    for _ in 0..n {
+        let mut row = vec![' '; key.len()];
+        grid.push(row);
+    }
+
+    grid
+}
+
+fn string_to_grid(s: &str, n: usize) -> Vec<Vec<char>> {
+    let mut grid = Vec::new();
+    let mut row = Vec::new();
+
+    for (i, c) in s.chars().enumerate() {
+        row.push(c);
+
+        if (i + 1) % n == 0 {
+            grid.push(row);
+            row = Vec::new();
+        }
+    }
+
+    if !row.is_empty() {
+        grid.push(row);
+    }
+
+    grid
+}
+
+fn transpose(grid: &Vec<Vec<char>>) -> Vec<Vec<char>> {
+    if grid.is_empty() {
+        return vec![];
+    }
+
+    let num_rows = grid.len();
+    let num_cols = grid[0].len();
+    let mut transposed: Vec<Vec<char>> = vec![vec![]; num_cols];
+
+    for row in grid {
+        for (j, &val) in row.iter().enumerate() {
+            transposed[j].push(val);
+        }
+    }
+
+    transposed
+}
+
+
+
+fn pretty_grid(grid: &Vec<Vec<char>>) -> String {
+    let mut result = String::new();
+
+    // Print the header row
+    result.push_str("   ");
+    for (i, _) in grid[0].iter().enumerate() {
+        result.push_str(&format!("| {} ", i + 1));
+    }
+    result.push_str("|\n");
+
+    // Print the separator row
+    result.push_str("   ");
+    for _ in 0..grid[0].len() {
+        result.push_str("|---");
+    }
+    result.push_str("|\n");
+
+    // Print the grid rows
+    for (i, row) in grid.iter().enumerate() {
+        if i == 0 {
+            result.push_str("   ");
+            for &cell in row {
+                result.push_str(&format!("| {} ", cell));
+            }
+            result.push_str("|\n");
+        } else {
+            result.push_str(&format!("{:2} ", i));
+            for &cell in row {
+                result.push_str(&format!("| {} ", cell));
+            }
+            result.push_str("|\n");
+        }
+    }
+
+    result
+}
+
+fn print_grid(grid: &Vec<Vec<char>>) {
+    for row in grid {
+        for ch in row {
+            if *ch == ' ' {
+                print!("_");
+            } else {
+                print!("{}", ch);
+            }
+        }
+        println!();
+    }
 }

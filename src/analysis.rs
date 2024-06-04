@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, iter};
 
 use itertools::Itertools;
 
-use crate::{kryptos, kryptos2, vdecode, vig1table, vig2table, K2p, K2};
+use crate::{keyless, vig2table};
 
 pub struct AnalysisResult {
     pub chi_percent: String,
@@ -45,8 +45,9 @@ pub fn analyze(
     let aster_score = percentage_blocks(aster_score(encrypted_text,plaintext),0.0, 100.0);
     let substitution_match = substitution_cipher_score(encrypted_text, plaintext).unwrap_or(0.0);
     let substitution_score = percentage_blocks(substitution_match, 0.0, 100.0);
- 
-    println!("{}", kryptos("KRYPTOS", encrypted_text, plaintext, max_key_length));
+
+    keyless(encrypted_text, plaintext, max_key_length);
+
     AnalysisResult {
         chi_percent,
         match_percent,
@@ -439,3 +440,38 @@ pub fn substitution_cipher_score(str1: &str, str2: &str) -> Option<f64> {
     let score = (match_count as f64 / total_count as f64) * 100.0;
     Some(score)
 }
+
+fn find_substitution_key(plaintext: &str, ciphertext: &str) -> Option<[char; 26]> {
+    if plaintext.len() != ciphertext.len() {
+        return None;
+    }
+
+    let mut key = ['_'; 26];
+    let mut used = [false; 26];
+
+    for (p, c) in plaintext.chars().zip(ciphertext.chars()) {
+        if !p.is_ascii_alphabetic() || !c.is_ascii_alphabetic() {
+            continue;
+        }
+
+        let p_idx = (p.to_ascii_lowercase() as u8 - b'a') as usize;
+        let c_idx = (c.to_ascii_lowercase() as u8 - b'a') as usize;
+
+        if key[p_idx] == '_' {
+            if used[c_idx] {
+                return None;
+            }
+            key[p_idx] = c.to_ascii_lowercase();
+            used[c_idx] = true;
+        } else if key[p_idx] != c.to_ascii_lowercase() {
+            return None;
+        }
+    }
+
+    if key.contains(&'_') {
+        return None;
+    }
+
+    Some(key)
+}
+
