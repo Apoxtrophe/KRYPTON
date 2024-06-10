@@ -1,4 +1,4 @@
-use crate::{analysis::{aster_score, best_phi, match_percentage, substitution_cipher_score}, vdecode, ALPHABET};
+use crate::{analysis::{aster_score, best_phi, match_percentage, substitution_cipher_score}, ALPHABET};
 
 pub fn generate_vigenere_table(keyword1: &str, keyword2: &str) -> Vec<Vec<char>> {
     let alphabet: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().collect();
@@ -48,7 +48,7 @@ pub fn every_nth_letter(s: &str, n: usize) -> String {
         .map(|(_, c)| c)
         .collect()
 }
-
+/* 
 pub fn kryptos(
     keyword1: &str,
     encrypted: &str,
@@ -92,6 +92,7 @@ pub fn kryptos(
     
 }
 
+
 pub fn kryptos2(
     encrypted: &str,
     comparison: &str,
@@ -132,6 +133,8 @@ pub fn kryptos2(
 
     (best_keyword1, best_keyword2)
 }
+*/
+
 
 pub fn keyless(
     encrypted_text: &str,
@@ -143,12 +146,12 @@ pub fn keyless(
 
     let enc_columns: Vec<String> = transpose(&enc_block).iter().map(|col| col.iter().collect()).collect();
     let pln_columns: Vec<String> = transpose(&pln_block).iter().map(|col| col.iter().collect()).collect();
-    
+
     let enc_rows = enc_block.iter().map(|row| row.iter().collect::<String>()).collect::<Vec<String>>();
     let pln_rows = pln_block.iter().map(|row| row.iter().collect::<String>()).collect::<Vec<String>>();
 
     for i in 0..enc_columns.len() {
-        println!("Line: {} Score: {:?} Code: {}",i + 1, substitution_cipher_score(&enc_columns[i], &pln_columns[i]), enc_columns[i]);
+        println!("Code: {} Line: {} Score: {:?} ",enc_columns[i],i + 1, substitution_cipher_score(&enc_columns[i], &pln_columns[i]));
     }   
     let alphabet = ALPHABET;
     let mut new_table = create_decipher_grid(&alphabet, max_key_length);
@@ -164,10 +167,14 @@ pub fn keyless(
                 }
             }
         }
-        
+
     }
     println!("{}", pretty_grid(&new_table));
     print_grid(&new_table);
+
+    let decod = new_decode(&new_table, encrypted_text);
+    println!("{}", encrypted_text);
+    println!("{}", decod);
 
 }
 
@@ -220,8 +227,6 @@ fn transpose(grid: &Vec<Vec<char>>) -> Vec<Vec<char>> {
     transposed
 }
 
-
-
 fn pretty_grid(grid: &Vec<Vec<char>>) -> String {
     let mut result = String::new();
 
@@ -270,4 +275,22 @@ fn print_grid(grid: &Vec<Vec<char>>) {
         }
         println!();
     }
+}
+
+pub fn new_decode (
+    grid: &Vec<Vec<char>>,
+    encrypted_text: &str,
+) -> String {
+    let encrypted_chars: Vec<char> = encrypted_text.to_uppercase().chars().collect();
+    let mut decrypted_chars: Vec<char> = Vec::with_capacity(encrypted_chars.len());
+    for (index, &encrypted_char) in encrypted_chars.iter().enumerate() {
+        let wrapped_index = (index % (grid.len() - 1)) + 1;
+        if let Some(pointer) = grid[wrapped_index].iter().position(|&c| c == encrypted_char) {
+            decrypted_chars.push(grid[0][pointer]);
+        }
+        else {
+            decrypted_chars.push('_');
+        }
+    }
+    decrypted_chars.into_iter().collect()
 }

@@ -1,18 +1,4 @@
-use crate::analysis::match_percentage;
-
-
-pub fn vdecode(encrypted: &str, table: &[Vec<char>]) -> String {
-    let encrypted_chars: Vec<char> = encrypted.to_uppercase().chars().collect();
-    let mut decrypted_chars: Vec<char> = Vec::with_capacity(encrypted_chars.len());
-
-    for (index, &encrypted_char) in encrypted_chars.iter().enumerate() {
-        let wrapped_index = (index % (table.len() - 1)) + 1;
-        if let Some(pointer) = table[wrapped_index].iter().position(|&c| c == encrypted_char) {
-            decrypted_chars.push(table[0][pointer]);
-        }
-    }
-    decrypted_chars.into_iter().collect()
-}
+use crate::{analysis::match_percentage, vig2table};
 
 pub fn vigenere(plain_text: &str, key: &str) -> String {
     // Remove all unicode and non-ascii characters from key

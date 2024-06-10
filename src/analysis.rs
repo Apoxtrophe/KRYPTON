@@ -2,68 +2,50 @@ use std::{collections::{HashMap, HashSet}, iter};
 
 use itertools::Itertools;
 
-use crate::{keyless, vig2table};
+use crate::{keyless, vig2table, ALPHABET};
 
 pub struct AnalysisResult {
-    pub chi_percent: String,
-    pub match_percent: String,
+    pub chi_score: f64,
+    pub match_score: f64,
     pub kasiski: Vec<usize>,
-    pub friedman_key_length: usize,
-    pub friedman_confidence: String,
-    pub key_elim_score: String,
-    pub key_elim_key_length: usize,
-    pub key_elim_key: String,
-    pub coincidence: String,
-    pub phi_score: String,
-    pub phi_key: usize,
-    pub aster_score: String,
-    pub substitution_score: String,
+    pub friedman: (usize,f64),
+    pub key_elim: (usize, f64, String),
+    pub IOC: f64, 
+    pub phi: (usize, f64),
+    pub aster: f64,
+    pub substitution_match: f64,
 }
-
 
 pub fn analyze(                                                                                                                      
     encrypted_text: &str,
     plaintext: &str,
     max_key_length: usize,
-    excluded_factors: &[usize],
 ) -> AnalysisResult {    
 
-    let chi_percent = percentage_blocks(chi_squared_score(encrypted_text), 0.1, 10.0);
-    let match_percent = percentage_blocks(match_percentage(plaintext, encrypted_text), 0.0, 100.0);                                                                                                                                                       
-    let kasiski = kasiski_examination(encrypted_text, excluded_factors);
+    let chi_score = chi_squared_score(encrypted_text);
+    let match_score = match_percentage(plaintext, encrypted_text);
+    let kasiski = kasiski_examination(encrypted_text, &[1, 2, 4]);
     let friedman = friedman_key_length(encrypted_text, max_key_length);
-    let friedman_confidence = percentage_blocks(friedman.1, 0.05, 1.5);
-
     let key_elim = key_elimation(max_key_length, encrypted_text, plaintext);
-    let key_elim_score = percentage_blocks(key_elim.1, 0.0, 0.6);
-
-    let coincidence = percentage_blocks(index_of_coincidence(encrypted_text), 0.572, 1.04);
-
-    let phi_results = best_phi(encrypted_text, max_key_length);
-    let phi_key = phi_results.0;
-    let phi_score = percentage_blocks(phi_results.1, 1.0, 2.0);
-    let aster_score = percentage_blocks(aster_score(encrypted_text,plaintext),0.0, 100.0);
+    let IOC = index_of_coincidence(encrypted_text);
+    let phi = best_phi(encrypted_text, max_key_length);
+    let aster = aster_score(encrypted_text, plaintext);
     let substitution_match = substitution_cipher_score(encrypted_text, plaintext).unwrap_or(0.0);
-    let substitution_score = percentage_blocks(substitution_match, 0.0, 100.0);
 
-    keyless(encrypted_text, plaintext, max_key_length);
+    println!("{:?}", transpose_string(encrypted_text, max_key_length));
 
     AnalysisResult {
-        chi_percent,
-        match_percent,
+        chi_score,
+        match_score,
         kasiski,
-        friedman_key_length: friedman.0,
-        friedman_confidence,
-        key_elim_score,
-        key_elim_key_length: key_elim.0,
-        key_elim_key: key_elim.2,
-        coincidence,
-        phi_score,
-        phi_key,
-        aster_score,
-        substitution_score,
+        friedman,
+        key_elim,
+        IOC, 
+        phi,
+        aster,
+        substitution_match,
     }
-}
+}           
 
 pub fn chi_squared_score(encrypted_text: &str) -> f64 {
     let frequencies = [
@@ -307,7 +289,7 @@ fn decrypt_char(ch: char, shift: u8) -> char {
     }
 }
 
-fn percentage_blocks(value: f64, min: f64, max: f64) -> String {
+pub fn percentage_blocks(value: f64, min: f64, max: f64) -> String {
     let bounded_value = value.clamp(min, max);
     let percentage = (bounded_value - min) / (max - min);
     let filled_blocks = (percentage * 10.0).round() as usize;
@@ -475,3 +457,90 @@ fn find_substitution_key(plaintext: &str, ciphertext: &str) -> Option<[char; 26]
     Some(key)
 }
 
+fn odd_indexed_string(s: &str) -> String {
+    s.char_indices()
+        .filter(|(i, _)| i % 2 == 1)
+        .map(|(_, c)| c)
+        .collect()
+}
+
+fn even_indexed_string(s: &str) -> String {
+    s.char_indices()
+        .filter(|(i, _)| i % 2 == 0)
+        .map(|(_, c)| c)
+        .collect()
+}
+
+fn caesar_shift(text: &str, shift: i32) -> String {
+    let alphabet_upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+    text.chars()
+        .map(|c| {
+            if c.is_ascii_uppercase() {
+                let index = alphabet_upper.find(c).unwrap();
+                let shifted_index = (index as i32 + shift) % 26;
+                alphabet_upper.chars().nth(shifted_index as usize).unwrap()
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+
+fn transpose_string(input: &str, n: usize) -> Vec<Vec<char>>{
+    let inputvec = input.chars().collect::<Vec<char>>();
+    let length = inputvec.len();
+
+    let rows = (length as f64 / n as f64).floor() as usize;
+
+    let mut intermediate = vec![vec![' '; n]; rows];
+    let mut index = 0; 
+    for i in 0..rows {
+        for j in 0..n {
+            if index < length {
+                intermediate[i][j] = inputvec[index];
+                index += 1;
+            }
+        }
+    }
+    let resultSize = intermediate[0].len();
+    let resultInner = intermediate.len();
+
+    let mut result: Vec<Vec<char>> = vec![vec![' '; resultInner]; resultSize];
+
+    for i in 0..resultInner {
+        for j in 0..resultSize {
+            result[j][i] = intermediate[i][j];
+        }
+    }
+    result
+}
+
+fn ioc(text: &str) -> f64 {
+    // Filter the text to include only alphabetic characters and convert to lowercase
+    let filtered_text: Vec<char> = text
+        .chars()
+        .filter(|c| c.is_alphabetic())
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
+
+    let length = filtered_text.len();
+    if length <= 1 {
+        return 0.0;
+    }
+
+    // Calculate frequency of each character
+    let mut frequencies = [0; 26];
+    for &c in &filtered_text {
+        frequencies[(c as usize) - ('a' as usize)] += 1;
+    }
+
+    // Calculate the Index of Coincidence
+    let mut ic = 0.0;
+    for &freq in &frequencies {
+        ic += (freq * (freq - 1)) as f64;
+    }
+    ic /= (length * (length - 1)) as f64;
+
+    ic
+}
