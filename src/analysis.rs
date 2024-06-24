@@ -205,32 +205,6 @@ pub fn key_elimination(key_length: usize, encrypted_text: &str, plaintext: &str)
     (key_length, normalized_score, best_sequence)
 }
 
-
-fn decrypt_vigenere(encrypted_text: &str, key: &str) -> String {
-    let key_len = key.len();
-    let mut decrypted = String::with_capacity(encrypted_text.len());
-
-    for (i, ch) in encrypted_text.chars().enumerate() {
-        if ch.is_ascii_alphabetic() {
-            let shift = key.chars().nth(i % key_len).unwrap() as u8 - b'A';
-            let decrypted_char = decrypt_char(ch, shift);
-            decrypted.push(decrypted_char);
-        } else {
-            decrypted.push(ch);
-        }
-    }
-
-    decrypted
-}
-
-fn decrypt_char(ch: char, shift: u8) -> char {
-    if ch.is_ascii_lowercase() {
-        ((ch as u8 - b'a' - shift + 26) % 26 + b'a') as char
-    } else {
-        ((ch as u8 - b'A' - shift + 26) % 26 + b'A') as char
-    }
-}
-
 pub fn percentage_blocks(value: f64, min: f64, max: f64) -> String {
     let bounded_value = value.clamp(min, max);
     let percentage = (bounded_value - min) / (max - min);
@@ -349,99 +323,6 @@ pub fn substitution_cipher_score(str1: &str, str2: &str) -> Option<f64> {
 
     let score = (match_count as f64 / total_count as f64) * 100.0;
     Some(score)
-}
-
-fn find_substitution_key(plaintext: &str, ciphertext: &str) -> Option<[char; 26]> {
-    if plaintext.len() != ciphertext.len() {
-        return None;
-    }
-
-    let mut key = ['_'; 26];
-    let mut used = [false; 26];
-
-    for (p, c) in plaintext.chars().zip(ciphertext.chars()) {
-        if !p.is_ascii_alphabetic() || !c.is_ascii_alphabetic() {
-            continue;
-        }
-
-        let p_idx = (p.to_ascii_lowercase() as u8 - b'a') as usize;
-        let c_idx = (c.to_ascii_lowercase() as u8 - b'a') as usize;
-
-        if key[p_idx] == '_' {
-            if used[c_idx] {
-                return None;
-            }
-            key[p_idx] = c.to_ascii_lowercase();
-            used[c_idx] = true;
-        } else if key[p_idx] != c.to_ascii_lowercase() {
-            return None;
-        }
-    }
-
-    if key.contains(&'_') {
-        return None;
-    }
-
-    Some(key)
-}
-
-fn odd_indexed_string(s: &str) -> String {
-    s.char_indices()
-        .filter(|(i, _)| i % 2 == 1)
-        .map(|(_, c)| c)
-        .collect()
-}
-
-fn even_indexed_string(s: &str) -> String {
-    s.char_indices()
-        .filter(|(i, _)| i % 2 == 0)
-        .map(|(_, c)| c)
-        .collect()
-}
-
-fn caesar_shift(text: &str, shift: i32) -> String {
-    let alphabet_upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
-    text.chars()
-        .map(|c| {
-            if c.is_ascii_uppercase() {
-                let index = alphabet_upper.find(c).unwrap();
-                let shifted_index = (index as i32 + shift) % 26;
-                alphabet_upper.chars().nth(shifted_index as usize).unwrap()
-            } else {
-                c
-            }
-        })
-        .collect()
-}
-
-fn transpose_string(input: &str, n: usize) -> Vec<Vec<char>>{
-    let inputvec = input.chars().collect::<Vec<char>>();
-    let length = inputvec.len();
-
-    let rows = (length as f64 / n as f64).floor() as usize;
-
-    let mut intermediate = vec![vec![' '; n]; rows];
-    let mut index = 0; 
-    for i in 0..rows {
-        for j in 0..n {
-            if index < length {
-                intermediate[i][j] = inputvec[index];
-                index += 1;
-            }
-        }
-    }
-    let resultSize = intermediate[0].len();
-    let resultInner = intermediate.len();
-
-    let mut result: Vec<Vec<char>> = vec![vec![' '; resultInner]; resultSize];
-
-    for i in 0..resultInner {
-        for j in 0..resultSize {
-            result[j][i] = intermediate[i][j];
-        }
-    }
-    result
 }
 
 pub fn ioc(text: &str) -> f64 {

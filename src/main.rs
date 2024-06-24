@@ -7,16 +7,19 @@ mod analysis;
 
 mod crypt;
 use crypt::*;
-
-mod vigenere;
 use egui::{style::HandleShape, Align, Button, FontId, IconPainter, Layout, Slider};
-use vigenere::*;
 
 mod toolkit;
 use toolkit::*;
 
 mod kullback;
 use kullback::*;
+
+mod tigershark;
+use tigershark::*;
+
+mod bullshark;
+use bullshark::*;
 
 struct MyApp {
     encrypted: String,
@@ -31,6 +34,7 @@ struct MyApp {
     screenHeight: f32,
     editor_width: u8,
     last_update: Instant,
+    permuations: usize,
 }
 
 impl Default for MyApp {
@@ -48,6 +52,7 @@ impl Default for MyApp {
             screenWidth: 1920.0,
             editor_width: 5,
             last_update: Instant::now(),
+            permuations: 1000,
         }
     }
 }
@@ -153,7 +158,7 @@ impl eframe::App for MyApp {
                 ui.add_space(self.screenHeight * 0.01);
                 ui.style_mut().spacing.slider_width = (self.screenWidth * (0.04 * self.editor_width as f32));
                 ui.style_mut().spacing.slider_rail_height = 16.0;
-                ui.add(egui::Slider::new(&mut self.key_length2, 1..=30).text("Key Length"));
+                ui.add(egui::Slider::new(&mut self.key_length2, 1..=30).text("Key 2 Length"));
                 ui.add_sized(
                     [self.screenWidth * (0.06 * self.editor_width as f32), self.screenHeight * 0.02],
                     egui::TextEdit::singleline(&mut self.key1)
@@ -230,7 +235,7 @@ impl eframe::App for MyApp {
                     ui.separator();
                     ui.heading(egui::RichText::new(format!("ASTER SCORE")).color(egui::Color32::LIGHT_GREEN).font(FontId::monospace(16.0)),
                     );
-                    ui.heading(egui::RichText::new(format!("AVG. Char Distance Of Matching Indices")).color(egui::Color32::LIGHT_GREEN).font(FontId::monospace(16.0)),
+                    ui.heading(egui::RichText::new(format!("AVG. Char Distance Of Matching Indices \n{}", aster_score(&self.encrypted, &self.plaintext))).color(egui::Color32::LIGHT_GREEN).font(FontId::monospace(16.0)),
                     );
                     ui.heading(egui::RichText::new(format!("LOW MATCH {} CLOSE MATCH", percentage_blocks(aster_score(&self.encrypted, &self.plaintext), 0.0, 100.0))).color(egui::Color32::LIGHT_GREEN).font(FontId::monospace(16.0)),
                     );
@@ -258,9 +263,13 @@ impl eframe::App for MyApp {
                 if ui.button(egui::RichText::new("Decrypt\nViginere").font(FontId::monospace(24.0))).clicked() {
                     self.terminal1 = vigenere_decrypt(&self.encrypted, &self.key1, Some(&self.key2));
                 }
-                ui.add(egui::Slider::new(&mut self.key_length1, 1..=26));
-                if ui.button(egui::RichText::new("Tiger Shark").font(FontId::monospace(24.0))).clicked() {
-                    self.terminal1 = format!("{:?}",  tigershark(self.key_length1, self.key_length2, &self.encrypted, &self.plaintext));
+                ui.add(egui::Slider::new(&mut self.key_length1, 1..=26).text("Key Length 1"));
+                ui.add(egui::Slider::new(&mut self.permuations, 1..=100000).text("Permutations"));
+                if ui.button(egui::RichText::new("Tiger Shark Vigenere").font(FontId::monospace(24.0))).clicked() {
+                    self.terminal1 = tigershark_vigenere(self.key_length1, self.key_length2, &self.encrypted, &self.plaintext, self.permuations);
+                }
+                if ui.button(egui::RichText::new("Tiger Shark Beaufort").font(FontId::monospace(24.0))).clicked() {
+                    self.terminal1 = tigershark_beaufort(self.key_length1, self.key_length2, &self.encrypted, &self.plaintext, self.permuations);
                 }
 
                 ui.label(egui::RichText::new(&self.terminal1).font(FontId::monospace(16.0)));
